@@ -1,0 +1,10 @@
+name: skyheads
+description: heads... in the sky
+main: dev.kunet.skyheads.SkyHeads
+version: 0.1.0
+author: KuNet
+
+commands:
+  skyhead:
+    description: go to the sky to head
+    aliases: ["sh"]
