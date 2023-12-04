@@ -5,8 +5,8 @@ import com.github.retrooper.packetevents.event.simple.PacketPlayReceiveEvent
 import com.github.retrooper.packetevents.protocol.packettype.PacketType
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientChatMessage
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientEntityAction
+import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientPlayerFlying
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientTabComplete
-import net.md_5.bungee.api.chat.ClickEvent
 import org.bukkit.GameMode
 import org.bukkit.Sound
 import org.bukkit.command.Command
@@ -16,6 +16,9 @@ import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.player.PlayerQuitEvent
+import org.bukkit.util.Vector
+import kotlin.math.cos
+import kotlin.math.sin
 
 class SkyStateManager(val skyHeads: SkyHeads) : Listener, CommandExecutor, SimplePacketListenerAbstract() {
     override fun onCommand(
@@ -50,12 +53,6 @@ class SkyStateManager(val skyHeads: SkyHeads) : Listener, CommandExecutor, Simpl
         skyHeads.activePlayers[sender] = skyData
         skyData.start(sender)
 
-        sender.sendMessage("&e&oEntering sky mode &7&o(TIP: Sneak to exit!)".colorCode())
-        sender.send(
-            " ".comp() + "&a[\u00AB PREV]".comp().setAction(ClickEvent.Action.RUN_COMMAND, "!prev") +
-                    "  &a[NEXT \u00BB]  ".comp().setAction(ClickEvent.Action.RUN_COMMAND, "!next") +
-                    "&c[EXIT]".comp().setAction(ClickEvent.Action.RUN_COMMAND, "!exit")
-        )
         val location = sender.location
         location.y = 256.0
         location.yaw = 0f
@@ -63,9 +60,10 @@ class SkyStateManager(val skyHeads: SkyHeads) : Listener, CommandExecutor, Simpl
 
         sender.teleport(location)
         sender.gameMode = GameMode.CREATIVE
-        sender.flySpeed = 0.001f
+        sender.flySpeed = 0f
         sender.allowFlight = true
         sender.isFlying = true
+        sender.velocity = Vector(0.0, 0.001, 0.0)
 
         sender.playSound(sender.location, Sound.HORSE_SADDLE, 1f, 1.25f)
 
@@ -106,6 +104,31 @@ class SkyStateManager(val skyHeads: SkyHeads) : Listener, CommandExecutor, Simpl
             event.isCancelled = true
 
             data.updateQueryResults(player, chatMessage.message)
+            return
+        }
+
+        if (WrapperPlayClientPlayerFlying.isFlying(event.packetType)) {
+            val flying = WrapperPlayClientPlayerFlying(event)
+            if (!flying.hasRotationChanged()) return
+
+            val rotX = flying.location.yaw
+            val rotY = flying.location.pitch
+
+            val y = -sin(rotY * DEG_TO_RAD)
+            val xz = cos(rotY * DEG_TO_RAD)
+            val x = -xz * sin(rotX * DEG_TO_RAD)
+            val z = xz * cos(rotX * DEG_TO_RAD)
+
+            val vec = SkyVector(x, y, z)
+
+            data.onPan(player, vec)
+
+            return
+        }
+
+        if (event.packetType == PacketType.Play.Client.ANIMATION) {
+            //println("Animation")
+            data.onClick(player)
             return
         }
     }

@@ -1,14 +1,14 @@
 package dev.kunet.skyheads
 
-enum class Category(val data: String) {
-    ALPHABET("alphabet"),
-    ANIMALS("animals"),
-    BLOCKS("blocks"),
-    DECORATION("decoration"),
-    FOOD_DRINKS("food-drinks"),
-    HUMANOID("humanoid"),
-    HUMANS("humans"),
-    MISC("miscellaneous"),
-    MONSTERS("monsters"),
-    PLANTS("plants"),
+enum class Category(val data: String, val displayName: String) {
+    ALPHABET("alphabet", "Alphabet"),
+    ANIMALS("animals", "Animals"),
+    BLOCKS("blocks", "Blocks"),
+    DECORATION("decoration", "Decorations"),
+    FOOD_DRINKS("food-drinks", "Food & Drink"),
+    HUMANOID("humanoid", "Humanoids"),
+    HUMANS("humans", "Humans"),
+    MISC("miscellaneous", "Misc"),
+    MONSTERS("monsters", "Monsters"),
+    PLANTS("plants", "Plants"),
 }

@@ -15,6 +15,7 @@ import org.bukkit.ChatColor
 import org.bukkit.entity.Player
 import java.io.StringReader
 import java.util.*
+import kotlin.math.absoluteValue
 
 fun String.parseJson(): JsonElement {
     val jsonReader = JsonReader(StringReader(this))
@@ -23,6 +24,9 @@ fun String.parseJson(): JsonElement {
 }
 
 fun String.colorCode(): String = ChatColor.translateAlternateColorCodes('&', this)
+
+val colorCodes = "c6eab9d".toCharArray().map { "&$it".colorCode() }
+fun getRainbowColor(i: Int) = colorCodes[i.absoluteValue % colorCodes.size]
 
 fun Player.sendPacket(packet: PacketWrapper<*>) = PacketEvents.getAPI().playerManager.sendPacket(this, packet)
 

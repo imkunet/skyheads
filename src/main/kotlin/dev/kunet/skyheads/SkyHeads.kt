@@ -14,6 +14,7 @@ import kotlin.system.measureTimeMillis
 
 class SkyHeads : JavaPlugin() {
     val headData = IdentityHashMap<Category, MutableList<HeadData>>()
+    val tags = mutableSetOf<String>()
     val activePlayers = hashMapOf<Player, SkyData>()
 
     override fun onEnable() {
@@ -32,7 +33,8 @@ class SkyHeads : JavaPlugin() {
         val fetchTime = measureTimeMillis {
             Category.entries.forEach { fetch(it) }
         }
-        logger.info("finished fetching in ${fetchTime}ms")
+        logger.info("${headData.values.sumOf { it.size }} heads loaded with ${tags.size} tags")
+        logger.info("finished loading in ${fetchTime}ms")
         val skyStateManager = SkyStateManager(this)
 
         getCommand("skyhead").executor = skyStateManager
@@ -43,7 +45,7 @@ class SkyHeads : JavaPlugin() {
         server.scheduler.scheduleSyncRepeatingTask(this, {
             for (activePlayer in activePlayers) {
                 if (activePlayer.key.isFlying) continue
-                activePlayer.key.isFlying = true
+                activePlayers.remove(activePlayer.key)?.resetBack(activePlayer.key)
             }
         }, 0L, 1L)
     }
@@ -77,12 +79,16 @@ class SkyHeads : JavaPlugin() {
             val jsonInput = file.readText()
             val heads = mutableListOf<HeadData>()
             jsonInput.parseJson().asJsonArray.map { it.asJsonObject }.forEach {
-                heads += HeadData(
+                val head = HeadData(
                     it.get("name").asString,
                     it.get("uuid").asString,
-                    it.get("tags").asString,
+                    it.get("tags").asString.split(',').map { s -> s.lowercase().replace(' ', '_') },
                     it.get("value").asString,
                 )
+
+                tags.addAll(head.tags)
+
+                heads += head
             }
 
             headData[category] = heads
