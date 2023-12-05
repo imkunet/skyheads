@@ -23,8 +23,8 @@ import kotlin.math.sin
 class SkyStateManager(val skyHeads: SkyHeads) : Listener, CommandExecutor, SimplePacketListenerAbstract() {
     override fun onCommand(
         sender: CommandSender,
-        ignored: Command?,
-        command: String?,
+        ignored: Command,
+        command: String,
         args: Array<out String>?
     ): Boolean {
         if (sender !is Player) {
@@ -66,6 +66,11 @@ class SkyStateManager(val skyHeads: SkyHeads) : Listener, CommandExecutor, Simpl
         sender.velocity = Vector(0.0, 0.001, 0.0)
 
         sender.playSound(sender.location, Sound.HORSE_SADDLE, 1f, 1.25f)
+
+        if (args != null && args.isNotEmpty()) {
+            val query = args.joinToString(" ")
+            skyData.updateQueryResults(sender, query)
+        }
 
         return true
     }

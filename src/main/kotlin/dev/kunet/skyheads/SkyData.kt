@@ -9,10 +9,7 @@ import com.github.retrooper.packetevents.protocol.particle.data.LegacyParticleDa
 import com.github.retrooper.packetevents.protocol.particle.type.ParticleTypes
 import com.github.retrooper.packetevents.util.Vector3d
 import com.github.retrooper.packetevents.util.Vector3f
-import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityMetadata
-import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerParticle
-import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSpawnEntity
-import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerTabComplete
+import com.github.retrooper.packetevents.wrapper.play.server.*
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerTabComplete.CommandMatch
 import net.md_5.bungee.api.chat.ClickEvent
 import org.bukkit.Bukkit
@@ -50,7 +47,8 @@ data class SkyData(
         player: Player,
         id: Int,
         offset: SkyVector,
-        item: ItemStack? = null
+        item: ItemStack? = null,
+        text: String? = null,
     ) {
         val wrapperPlayServerSpawnEntity = WrapperPlayServerSpawnEntity(
             id,
@@ -66,19 +64,21 @@ data class SkyData(
 
         player.sendPacket(wrapperPlayServerSpawnEntity)
 
-        val wrapperPlayServerEntityMetadata = WrapperPlayServerEntityMetadata(
-            id, listOf(
-                EntityData(0, EntityDataTypes.BYTE, 32.toByte()),
-                //EntityData(2, EntityDataTypes.STRING, "hello world"),
-                //EntityData(3, EntityDataTypes.BYTE, 1.toByte()),
-                EntityData(10, EntityDataTypes.BYTE, 17.toByte()),
-                EntityData(
-                    11,
-                    EntityDataTypes.VECTOR3F,
-                    Vector3f(atan2(offset.y, offset.z) * RAD_TO_DEG, atan2(offset.x, -offset.z) * RAD_TO_DEG, 0f)
-                )
+        val entityData = mutableListOf(
+            EntityData(0, EntityDataTypes.BYTE, 32.toByte()), EntityData(10, EntityDataTypes.BYTE, 17.toByte()),
+            EntityData(
+                11,
+                EntityDataTypes.VECTOR3F,
+                Vector3f(atan2(offset.y, offset.z) * RAD_TO_DEG, atan2(offset.x, -offset.z) * RAD_TO_DEG, 0f)
             )
         )
+
+        if (text != null) {
+            entityData += EntityData(2, EntityDataTypes.STRING, text.colorCode())
+            entityData += EntityData(3, EntityDataTypes.BYTE, 1.toByte())
+        }
+
+        val wrapperPlayServerEntityMetadata = WrapperPlayServerEntityMetadata(id, entityData)
 
         player.sendPacket(wrapperPlayServerEntityMetadata)
 
@@ -91,6 +91,7 @@ data class SkyData(
     }
 
     fun start(player: Player) {
+        player.sendMessage("&e&oEntering sky mode &7&o(TIP: Sneak to exit!)".colorCode())
         sendPrompt(player)
 
         var id = 0
@@ -106,14 +107,27 @@ data class SkyData(
                     player,
                     gridOffset + id++,
                     offset,
-                    createSkull(QuestionHead)
+                    createPESkull(QuestionHead)
                 )
             }
         }
+
+        id = 0
+        createArmorStand(
+            player,
+            guiOffset + id++,
+            SkyVector(0f, (height / 2f) * gapY + (gapY / 2) + 0.5f, depth),
+            text = "Results for \"\"."
+        )
+        createArmorStand(
+            player,
+            guiOffset + id++,
+            SkyVector(0f, (height / 2f) * gapY + (gapY / 2) + 0.2f, depth),
+            text = "Page &b0&f/&b0&f of &b0 &fentries."
+        )
     }
 
     private fun sendPrompt(player: Player) {
-        player.sendMessage("&e&oEntering sky mode &7&o(TIP: Sneak to exit!)".colorCode())
         var selection = " ".comp()
         var n = 0
         for (entry in Category.entries) {
@@ -122,6 +136,7 @@ data class SkyData(
         }
 
         player.send(selection)
+        player.sendMessage("")
         player.send(
             " ".comp() + "&a[\u00AB PREV]".comp().setAction(ClickEvent.Action.RUN_COMMAND, "!prev") +
                     "  &a[NEXT \u00BB]  ".comp().setAction(ClickEvent.Action.RUN_COMMAND, "!next") +
@@ -130,6 +145,15 @@ data class SkyData(
     }
 
     fun resetBack(player: Player) {
+        val entitiesToDestroy = mutableListOf<Int>()
+        for (i in 0..dimensions) {
+            entitiesToDestroy += gridOffset + i
+        }
+
+        entitiesToDestroy.add(guiOffset)
+        entitiesToDestroy.add(guiOffset + 1)
+        player.sendPacket(WrapperPlayServerDestroyEntities(*entitiesToDestroy.toIntArray()))
+
         if (Bukkit.isPrimaryThread()) resetBackReal(player)
         else skyHeads.server.scheduler.runTask(skyHeads) { resetBackReal(player) }
     }
@@ -280,11 +304,14 @@ data class SkyData(
         this.page = 0
         this.query = query
 
+        sendNameChange(player, guiOffset, "Results for \"&b${this.query}&f\".")
+
         refreshScreen(player)
     }
 
     private fun showingWhich(player: Player, error: Boolean, extra: String? = null) {
         val pxd = page * dimensions
+
         player.sendActionBar(
             "Showing &b${pxd}&f-&b${
                 min(
@@ -304,8 +331,14 @@ data class SkyData(
         var id = gridOffset
         var d = 0
 
+        sendNameChange(
+            player,
+            guiOffset + 1,
+            "Page &b${page + 1}&f/&b${results.size / dimensions + 1}&f of &b${results.size} &fentries."
+        )
+
         repeat(dimensions) {
-            sendHead(player, id++, results.getOrNull(pxd + d++)?.toPacketEventsItem() ?: createSkull(QuestionHead))
+            sendHead(player, id++, results.getOrNull(pxd + d++)?.toPacketEventsItem() ?: createPESkull(QuestionHead))
         }
     }
 
@@ -325,17 +358,6 @@ data class SkyData(
             correspondingHeads.forEachIndexed { index, skyVector ->
                 val difference = skyVector - test
                 if (!difference.dimensionsWithinRange(0.3f)) return@forEachIndexed
-
-                /*player.sendPacket(
-                    WrapperPlayServerParticle(
-                        Particle(ParticleTypes.FLAME, LegacyParticleData.zero()),
-                        false,
-                        Vector3d(test.x.toDouble(), test.y.toDouble(), test.z.toDouble()),
-                        Vector3f.zero(),
-                        0f,
-                        1
-                    )
-                )*/
 
                 val hit = hits[index]
 
@@ -401,6 +423,7 @@ data class SkyData(
 
         if (isHeadPick) {
             val skyVector = correspondingHeads[pickingHead]
+            val headData = results.getOrNull(page * dimensions + pickingHead) ?: return
 
             repeat(5) {
                 repeat(24) { out ->
@@ -413,11 +436,52 @@ data class SkyData(
                         player.sendColoredParticle(
                             skyVector + SkyVector(x.toFloat(), y.toFloat(), 0f),
                             baseColors[baseColorIndex],
-                            1f
+                            1f - out / 48f
                         )
                     }
                 }
             }
+
+            player.playSound(player.location, Sound.LAVA_POP, 1f, 0.8f)
+            player.playSound(player.location, Sound.LEVEL_UP, 1f, 1.5f)
+
+            val skullItem = createNMSSkull(headData.value, headData.uuid)
+            val itemMeta = skullItem.itemMeta
+            itemMeta.displayName = "&b${headData.name}".colorCode()
+            val lore = mutableListOf(
+                "${getRainbowColor(headData.category.ordinal)}${headData.category.displayName}".colorCode(),
+                ""
+            )
+            lore.addAll(headData.tags.map { "&7#${it}".colorCode() })
+            itemMeta.lore = lore
+            skullItem.itemMeta = itemMeta
+            player.inventory.addItem(skullItem)
+
+            player.sendMessage("")
+            player.sendMessage("")
+            player.send(" \"&b${headData.name}&f\"".comp())
+            player.send(
+                " ".comp() + "${getRainbowColor(headData.category.ordinal)}[${headData.category.displayName}]".comp()
+                    .setAction(ClickEvent.Action.SUGGEST_COMMAND, "!category ${headData.category.data}")
+            )
+            var tagComp = " ".comp()
+            var previousIsTag = false
+
+            for (tag in headData.tags) {
+                if (previousIsTag) tagComp += "&8, "
+                previousIsTag = true
+
+                tagComp += "&7#${tag}".comp().setAction(ClickEvent.Action.SUGGEST_COMMAND, "!tag $tag")
+            }
+
+            if (headData.tags.isNotEmpty()) {
+                player.sendMessage("")
+                player.send(tagComp)
+            }
+            player.sendMessage("")
+            player.sendMessage("")
+
+            sendPrompt(player)
 
             return
         }

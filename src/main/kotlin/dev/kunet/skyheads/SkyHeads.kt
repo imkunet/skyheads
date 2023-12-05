@@ -80,8 +80,9 @@ class SkyHeads : JavaPlugin() {
             val heads = mutableListOf<HeadData>()
             jsonInput.parseJson().asJsonArray.map { it.asJsonObject }.forEach {
                 val head = HeadData(
-                    it.get("name").asString,
+                    it.get("name").asString.replace('&', '+'),
                     it.get("uuid").asString,
+                    category,
                     it.get("tags").asString.split(',').map { s -> s.lowercase().replace(' ', '_') },
                     it.get("value").asString,
                 )
